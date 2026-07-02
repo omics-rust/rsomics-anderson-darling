@@ -125,9 +125,17 @@ pub fn fit_and_logcdf_logsf(dist: Dist, x: &[f64]) -> Result<DistFit> {
             let xbar = mean(x);
             for i in 0..n {
                 let w = sorted[i] / xbar;
-                // expon: logcdf = log(-expm1(-w)), logsf = -w
-                logcdf[i] = neg_expm1(-w).ln();
-                logsf[i] = -w;
+                // expon's support is [0, ∞); below it scipy clamps cdf=0/sf=1,
+                // giving logcdf=-∞ and logsf=0. The analytic tails (log(-expm1(-w))
+                // is log of a negative → NaN; -w flips positive) don't hold there,
+                // so a below-support value drives A² to +∞, matching scipy.
+                if w < 0.0 {
+                    logcdf[i] = f64::NEG_INFINITY;
+                    logsf[i] = 0.0;
+                } else {
+                    logcdf[i] = neg_expm1(-w).ln();
+                    logsf[i] = -w;
+                }
             }
             vec![0.0, xbar]
         }

@@ -107,6 +107,18 @@ mod tests {
     }
 
     #[test]
+    fn expon_below_support_is_positive_infinity() {
+        // scipy 1.17.1: anderson([-1,2,3], 'expon') == inf (the -1 is below the
+        // [0, ∞) support, so logcdf=-inf pushes A² to +inf).
+        let r = anderson(&[-1.0, 2.0, 3.0], Dist::Expon).unwrap();
+        assert!(
+            r.statistic.is_infinite() && r.statistic > 0.0,
+            "{}",
+            r.statistic
+        );
+    }
+
+    #[test]
     fn rejects_short_input() {
         assert!(anderson(&[1.0], Dist::Norm).is_err());
     }

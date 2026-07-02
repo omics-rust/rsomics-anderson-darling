@@ -1,6 +1,6 @@
 [package]
 name = "rsomics-anderson-darling"
-version = "0.1.0"
+version = "0.1.1"
 description = "Anderson-Darling goodness-of-fit (one-sample + k-sample) — value-exact to scipy.stats.anderson / anderson_ksamp"
 edition = "2024"
 rust-version = "1.91"

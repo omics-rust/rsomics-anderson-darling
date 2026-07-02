@@ -16,7 +16,17 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct Golden {
     one_sample: Vec<OneCase>,
+    one_sample_boundary: Vec<BoundaryCase>,
     k_sample: Vec<KCase>,
+}
+
+#[derive(Deserialize)]
+struct BoundaryCase {
+    name: String,
+    dist: String,
+    /// scipy statistic encoded as a string so non-finite values (JSON has no
+    /// native infinity) survive the round-trip; currently always `"inf"`.
+    statistic: String,
 }
 
 #[derive(Deserialize)]
@@ -130,6 +140,26 @@ fn report_worst_relerr() {
     }
     eprintln!("WORST statistic rel-err = {worst_stat:e}");
     eprintln!("WORST p-value   rel-err = {worst_p:e}");
+}
+
+#[test]
+fn one_sample_boundary_matches_scipy() {
+    // A data value outside the fitted distribution's support drives the
+    // logcdf/logsf term to -∞/0 and the A² statistic to +∞, exactly as scipy
+    // (`expon.anderson` on data below the [0, ∞) support). We used to emit NaN.
+    let g = read_golden();
+    for c in &g.one_sample_boundary {
+        let data = load(&golden_dir().join(format!("{}.tsv", c.name)));
+        let dist = Dist::parse(&c.dist).unwrap();
+        let r = anderson(&data, dist).unwrap();
+        assert_eq!(c.statistic, "inf", "{}: unexpected golden encoding", c.name);
+        assert!(
+            r.statistic.is_infinite() && r.statistic > 0.0,
+            "{}: A² {} vs scipy +inf",
+            c.name,
+            r.statistic
+        );
+    }
 }
 
 #[test]

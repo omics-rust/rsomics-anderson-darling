@@ -124,6 +124,18 @@
       ]
     }
   ],
+  "one_sample_boundary": [
+    {
+      "name": "expon_below",
+      "dist": "expon",
+      "statistic": "inf"
+    },
+    {
+      "name": "expon_below2",
+      "dist": "expon",
+      "statistic": "inf"
+    }
+  ],
   "k_sample": [
     {
       "name": "k3_norm",
