@@ -58,7 +58,7 @@ passed. `--json` emits a single machine-readable result envelope.
 |---|---|
 | `norm` | bit-exact (pairwise sum matches `np.sum`/`np.mean`/`np.std`) |
 | `expon` | bit-exact |
-| `gumbel_r` / `gumbel_l` | bit-exact (gumbel MLE solved to full precision) |
+| `gumbel_r` / `gumbel_l` | bit-exact (gumbel MLE solved to full precision); see zero-variance boundary below |
 | `logistic` | ~1e-6 — see boundary below |
 | k-sample (midrank + right) | bit-exact / ≤1 ULP |
 
@@ -73,6 +73,17 @@ agrees with SciPy's reported statistic only to ~1e-6. The reported p-value is
 unaffected (logistic critical values are tabulated and the test statistic is
 typically below the cap), so this is a held compatibility boundary rather than a
 defect.
+
+**Zero-variance (constant) data.** On a constant sample SciPy's per-distribution
+defined values are: `norm`→`nan`, `expon`→`1.376…` (finite), `logistic`→`nan`,
+`gumbel_r`/`gumbel_l`→`+inf`. This crate matches all five. For the gumbel fits
+SciPy's scale MLE underflows to the smallest normal (`2.2e-308`) with `loc→∞`, so
+A² diverges to `+inf`; we reproduce that limit directly rather than let the scale
+root-find land on a spurious finite value. A one-observation sample is refused
+(non-zero exit) instead of returning SciPy's `nan` — a defined test needs at least
+two observations. A *near*-constant sample (two distinct values very close) is a
+separate held boundary: `brentq` conditioning can drift the statistic by ~1.6e-5,
+which is not corrected.
 
 ## Performance
 

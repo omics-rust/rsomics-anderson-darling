@@ -17,6 +17,7 @@ use serde::Deserialize;
 struct Golden {
     one_sample: Vec<OneCase>,
     one_sample_boundary: Vec<BoundaryCase>,
+    one_sample_degenerate: Vec<BoundaryCase>,
     k_sample: Vec<KCase>,
 }
 
@@ -24,8 +25,9 @@ struct Golden {
 struct BoundaryCase {
     name: String,
     dist: String,
-    /// scipy statistic encoded as a string so non-finite values (JSON has no
-    /// native infinity) survive the round-trip; currently always `"inf"`.
+    /// scipy statistic encoded as a string so `nan`/`inf` (JSON has no native
+    /// non-finite literals) survive the round-trip; a plain decimal string is a
+    /// finite defined value.
     statistic: String,
 }
 
@@ -159,6 +161,62 @@ fn one_sample_boundary_matches_scipy() {
             c.name,
             r.statistic
         );
+    }
+}
+
+#[test]
+fn single_observation_fails_loud() {
+    // scipy returns nan for a 1-element sample; we refuse it (a defined test
+    // needs ≥2 observations) rather than emit a spurious finite A². Fail-loud:
+    // non-zero exit with a stderr message.
+    use std::io::Write;
+    use std::process::Command;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rsomics-anderson-darling"))
+        .args(["--dist", "norm", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"5\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(!out.status.success(), "expected non-zero exit on n=1");
+    assert!(
+        !out.stderr.is_empty(),
+        "expected a stderr message on n=1 failure"
+    );
+}
+
+#[test]
+fn one_sample_degenerate_matches_scipy() {
+    // Zero-variance (constant) data. scipy's per-dist defined values (scipy
+    // 1.17.1): norm→nan, expon→1.376…, logistic→nan, gumbel_r/gumbel_l→+∞.
+    // The gumbel scale MLE underflows to the smallest normal with loc→∞, so A²
+    // diverges to +∞ instead of the spurious finite value a naive scale root
+    // would give.
+    let g = read_golden();
+    for c in &g.one_sample_degenerate {
+        let data = load(&golden_dir().join(format!("{}.tsv", c.name)));
+        let dist = Dist::parse(&c.dist).unwrap();
+        let got = anderson(&data, dist).unwrap().statistic;
+        match c.statistic.as_str() {
+            "nan" => assert!(got.is_nan(), "{} {}: A² {got} vs scipy nan", c.name, c.dist),
+            "inf" => assert!(
+                got.is_infinite() && got > 0.0,
+                "{} {}: A² {got} vs scipy +inf",
+                c.name,
+                c.dist
+            ),
+            s => {
+                let want: f64 = s.parse().unwrap();
+                assert!(
+                    rel(got, want) <= 1e-12,
+                    "{} {}: A² {got} vs scipy {want}",
+                    c.name,
+                    c.dist
+                );
+            }
+        }
     }
 }
 

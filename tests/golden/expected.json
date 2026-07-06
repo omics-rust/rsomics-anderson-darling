@@ -136,6 +136,33 @@
       "statistic": "inf"
     }
   ],
+  "one_sample_degenerate": [
+    {
+      "name": "const3",
+      "dist": "norm",
+      "statistic": "nan"
+    },
+    {
+      "name": "const3",
+      "dist": "expon",
+      "statistic": "1.376025436161246"
+    },
+    {
+      "name": "const3",
+      "dist": "logistic",
+      "statistic": "nan"
+    },
+    {
+      "name": "const3",
+      "dist": "gumbel_r",
+      "statistic": "inf"
+    },
+    {
+      "name": "const3",
+      "dist": "gumbel_l",
+      "statistic": "inf"
+    }
+  ],
   "k_sample": [
     {
       "name": "k3_norm",

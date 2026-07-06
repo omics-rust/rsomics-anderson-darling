@@ -150,27 +150,35 @@ pub fn fit_and_logcdf_logsf(dist: Dist, x: &[f64]) -> Result<DistFit> {
             vec![a, b]
         }
         Dist::GumbelR => {
-            let (loc, scale) = fit_gumbel_r(x);
-            for i in 0..n {
-                let w = (sorted[i] - loc) / scale;
-                // gumbel_r: logcdf = -exp(-w), logsf = log(-expm1(-exp(-w)))
-                logcdf[i] = -(-w).exp();
-                logsf[i] = neg_expm1(-(-w).exp()).ln();
+            if is_constant(x) {
+                degenerate_gumbel(&mut logcdf, &mut logsf)
+            } else {
+                let (loc, scale) = fit_gumbel_r(x);
+                for i in 0..n {
+                    let w = (sorted[i] - loc) / scale;
+                    // gumbel_r: logcdf = -exp(-w), logsf = log(-expm1(-exp(-w)))
+                    logcdf[i] = -(-w).exp();
+                    logsf[i] = neg_expm1(-(-w).exp()).ln();
+                }
+                vec![loc, scale]
             }
-            vec![loc, scale]
         }
         Dist::GumbelL => {
-            // scipy: fit gumbel_l by negating data through gumbel_r, negating loc.
-            let neg: Vec<f64> = x.iter().map(|&v| -v).collect();
-            let (loc_r, scale) = fit_gumbel_r(&neg);
-            let loc = -loc_r;
-            for i in 0..n {
-                let w = (sorted[i] - loc) / scale;
-                // gumbel_l: logcdf = log(-expm1(-exp(w))), logsf = -exp(w)
-                logcdf[i] = neg_expm1(-w.exp()).ln();
-                logsf[i] = -w.exp();
+            if is_constant(x) {
+                degenerate_gumbel(&mut logcdf, &mut logsf)
+            } else {
+                // scipy fits gumbel_l by negating data through gumbel_r, negating loc.
+                let neg: Vec<f64> = x.iter().map(|&v| -v).collect();
+                let (loc_r, scale) = fit_gumbel_r(&neg);
+                let loc = -loc_r;
+                for i in 0..n {
+                    let w = (sorted[i] - loc) / scale;
+                    // gumbel_l: logcdf = log(-expm1(-exp(w))), logsf = -exp(w)
+                    logcdf[i] = neg_expm1(-w.exp()).ln();
+                    logsf[i] = -w.exp();
+                }
+                vec![loc, scale]
             }
-            vec![loc, scale]
         }
     };
 
@@ -185,6 +193,21 @@ pub struct DistFit {
     pub logcdf: Vec<f64>,
     pub logsf: Vec<f64>,
     pub params: Vec<f64>,
+}
+
+fn is_constant(x: &[f64]) -> bool {
+    x.iter().all(|&v| v == x[0])
+}
+
+/// Zero-variance data drives scipy's gumbel scale MLE to underflow to the
+/// smallest normal (2.2e-308) with loc→∞, so every standardized order statistic
+/// has logcdf=-∞ / logsf=0 and A² diverges to +∞. Reproduce that limit directly
+/// (the brentq scale root is ill-defined here and lands on a spurious nonzero
+/// scale). The reported fit is scipy's degenerate (loc=∞, scale=MIN_POSITIVE).
+fn degenerate_gumbel(logcdf: &mut [f64], logsf: &mut [f64]) -> Vec<f64> {
+    logcdf.fill(f64::NEG_INFINITY);
+    logsf.fill(0.0);
+    vec![f64::INFINITY, f64::MIN_POSITIVE]
 }
 
 /// `-expm1(x)` = `1 - exp(x)`, computed without catastrophic cancellation, the
